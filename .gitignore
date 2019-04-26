@@ -1,0 +1,5 @@
+#Ignore all folders in Data
+Data/*/
+Cats/
+Dogs/
+PetDataExpanded.zip
