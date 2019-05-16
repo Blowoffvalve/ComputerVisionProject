@@ -1,0 +1,230 @@
+Training log
+GPU Used: P100
+Nasnet
+Training principles
+	1. Kaiming Initialization
+	2. progressive resizing
+	3. Learning rate annealing
+	4. One cycle fitting(https://arxiv.org/abs/1512.03385): Allows you use higher learning rates without
+	5. Mixed precision training(learner.to_fp16())
+	6. Data order patterns(http://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1004128)
+Arch		lenEpoch	Init1 err	Init2 err	Init3 err	Init4 err	Init5 err		Best Model
+Resnet 18:	2:07		4	0.2225	4	0.2204	4	0.2206								Resnet18-4-4-stage-1
+									8	0.2196
+						8 	0.2136	8	0.1929	8	0.1912	8	0.1929	8	0.1921		Resnet18-8-stage-2
+						16 	0.2014	8	0.2016											Resnet18-16-stage-1
+			
+Resnet 34: 	2:15		4	0.1533	4	0.1530 	4	0.1472	4	0.1491					Resnet34-4-stage-2
+						8	0.1463	8	0.1431											Resnet34-8-stage-1
+						16	0.1426	8	0.1414											Resnet34-8-stage-2
+			##Retraining with 2 
+		128	0:56		5	0.2793	5	0.2898	5	0.1712	5	0.1266	5	0.1222
+		
+Resnet 50	2:30		4	0.1169	4	0.1176	4	0.1241								Resnet50-4-stage-3
+						8	0.1251	8	0.1251											Resnet50-8-stage-3
+						16	0.1314	8	0.1348											Resnet50-16-stage-1
+			##Retraining
+		128	1:53		5	0.2286	5	0.2473	5	0.1181	5	0.1188	5	0.1166
+						8	0.2216	8	0.2320	8	0.0892	
+Resnet 101	2:43		4	0.1049	4	0.1027	4	0.0988								Resnet101-4-stage-3
+						8	0.1035	8	0.1037											Resnet101-8-stage-3
+						16	0.1147	8	0.1103											Resnet101-16-stage-3
+			##Retraining
+		128	2:58		5	0.2102	5	0.2398	5	0.0965	5	0.0722	5	0.0724
+						
+Resnet 	152	3.34		4	0.1032	4	0.1022											Resnet152-4-stage-2
+						8	0.1049	8	0.1057											Resnet152-8-stage-2
+						16	0.1166	8	0.1156
+			##Retraining
+		128				5	0.2099	5	0.2332	5	0.0881	5	0.0602	5	0.0607
+
+Features
+fit_one_cycle(5,slice(lr/(2.6**4), lr))
+learn.recorder.plot_lr(return_fig=True).savefig("lr.jpg")
+learn.recorder.plot_losses(return_fig=True).savefig("losses.jpg")
+learn.recorder.plot_metrics(return_fig=True).savefig("metrics.jpg")
+
+
+Train on 128 and transfer learn that to train on 224	
+RESNET-34
+from fastai.vision import *	
+path = Path("Dogs")
+data = ImageDataBunch.from_folder(path, train=".", valid_pct=0.2, ds_tfms=get_transforms(), size=128, num_workers=4).normalize(imagenet_stats)
+learn = cnn_learner(data, models.resnet34, metrics = error_rate)
+learn.lr_find()
+learn.recorder.plot(return_fig=True).savefig("lrfind.jpg")
+lr  = 0.01
+learn.fit_one_cycle(5, slice(lr))
+dest = "Resnet34-128-stage-1"
+learn.save(dest)
+
+learn.unfreeze()
+learn.lr_find()
+learn.recorder.plot(return_fig=True).savefig("lrfind.jpg")
+learn.fit_one_cycle(5, slice(1e-4,lr/5))
+dest = "Resnet34-128-stage-2"
+learn.save(dest)
+
+data = ImageDataBunch.from_folder(path, train=".", valid_pct=0.2, ds_tfms=get_transforms(), size=224, num_workers=4).normalize(imagenet_stats)
+learn.data = data
+
+learn.freeze()
+learn.lr_find()
+learn.recorder.plot(return_fig=True).savefig("lrfind.jpg")
+lr = 1e-4
+learn.fit_one_cycle(5, slice(lr))
+dest = "Resnet34-128-stage-3"
+learn.save(dest)
+
+learn.unfreeze()
+learn.lr_find()
+learn.recorder.plot(return_fig=True).savefig("lrfind.jpg")
+learn.fit_one_cycle(5, slice(2e-4,lr/5))
+dest = "Resnet34-128-stage-4"
+learn.save(dest)
+
+learn.lr_find()
+learn.recorder.plot(return_fig=True).savefig("lrfind.jpg")
+
+lr = 1e-4
+learn.fit_one_cycle(5, slice(lr/10, lr))
+
+
+
+
+RESNET-50		
+from fastai.vision import *	
+path = Path("Dogs")
+data = ImageDataBunch.from_folder(path, train=".", valid_pct=0.2, ds_tfms=get_transforms(), size=128, num_workers=4).normalize(imagenet_stats)
+learn = cnn_learner(data, models.resnet50, metrics = error_rate)
+learn.lr_find()
+learn.recorder.plot(return_fig=True).savefig("lrfind.jpg")
+lr  = 0.01
+learn.fit_one_cycle(5, slice(lr))
+dest = "Resnet50-128-stage-1"
+learn.save(dest)
+
+learn.unfreeze()
+learn.lr_find()
+learn.recorder.plot(return_fig=True).savefig("lrfind.jpg")
+learn.fit_one_cycle(5, slice(5e-5,lr/5))
+dest = "Resnet50-128-stage-2"
+learn.save(dest)
+
+data = ImageDataBunch.from_folder(path, train=".", valid_pct=0.2, ds_tfms=get_transforms(), size=224, num_workers=4).normalize(imagenet_stats)
+learn.data = data
+
+learn.freeze()
+learn.lr_find()
+learn.recorder.plot(return_fig=True).savefig("lrfind.jpg")
+lr = 3e-3
+learn.fit_one_cycle(5, slice(lr))
+dest = "Resnet50-128-stage-3"
+learn.save(dest)
+
+learn.unfreeze()
+learn.lr_find()
+learn.recorder.plot(return_fig=True).savefig("lrfind.jpg")
+lr = 1e-4
+learn.fit_one_cycle(5, slice(7e-5, lr/5))
+dest = "Resnet50-128-stage-4"
+learn.save(dest)
+
+learn.lr_find()
+learn.recorder.plot(return_fig=True).savefig("lrfind.jpg")
+
+lr = 3e-5
+learn.fit_one_cycle(5, slice(lr))
+dest = "Resnet50-128-stage-5"
+learn.save(dest)
+
+RESNET-101
+from fastai.vision import *	
+path = Path("Dogs")
+data = ImageDataBunch.from_folder(path, train=".", valid_pct=0.2, ds_tfms=get_transforms(), size=128, num_workers=4).normalize(imagenet_stats)
+learn = cnn_learner(data, models.resnet101, metrics = error_rate)
+learn.lr_find()
+learn.recorder.plot(return_fig=True).savefig("lrfind.jpg")
+lr  = 0.01
+learn.fit_one_cycle(5, slice(lr))
+dest = "Resnet101-128-stage-1"
+learn.save(dest)
+
+learn.unfreeze()
+learn.lr_find()
+learn.recorder.plot(return_fig=True).savefig("lrfind.jpg")
+learn.fit_one_cycle(5, slice(2e-5,lr/5))
+dest = "Resnet101-128-stage-2"
+learn.save(dest)
+
+data = ImageDataBunch.from_folder(path, train=".", valid_pct=0.2, ds_tfms=get_transforms(), size=224, bs=32,num_workers=4).normalize(imagenet_stats)
+learn.data = data
+
+learn.freeze()
+learn.lr_find()
+learn.recorder.plot(return_fig=True).savefig("lrfind.jpg")
+lr = 3e-3
+learn.fit_one_cycle(5, slice(lr))
+dest = "Resnet101-128-stage-3"
+learn.save(dest)
+
+learn.unfreeze()
+learn.lr_find()
+learn.recorder.plot(return_fig=True).savefig("lrfind.jpg")
+learn.fit_one_cycle(5, slice(2e-3))
+dest = "Resnet101-128-stage-4"
+learn.save(dest)
+
+learn.lr_find()
+learn.recorder.plot(return_fig=True).savefig("lrfind.jpg")
+
+lr = 4e-4
+learn.fit_one_cycle(5, slice(lr))
+dest = "Resnet101-128-stage-5"
+learn.save(dest)
+
+
+RESNET-152
+from fastai.vision import *	
+path = Path("Dogs")
+data = ImageDataBunch.from_folder(path, train=".", valid_pct=0.2, ds_tfms=get_transforms(), size=128, num_workers=4).normalize(imagenet_stats)
+learn = cnn_learner(data, models.resnet152, metrics = error_rate)
+learn.lr_find()
+learn.recorder.plot(return_fig=True).savefig("lrfind.jpg")
+lr  = 0.01
+learn.fit_one_cycle(5, slice(lr))
+dest = "Resnet152-128-stage-1"
+learn.save(dest)
+
+learn.unfreeze()
+learn.lr_find()
+learn.recorder.plot(return_fig=True).savefig("lrfind.jpg")
+learn.fit_one_cycle(5, slice(3e-5,lr/5))
+dest = "Resnet152-128-stage-2"
+learn.save(dest)
+
+data = ImageDataBunch.from_folder(path, train=".", valid_pct=0.2, ds_tfms=get_transforms(), size=224, bs=32,num_workers=4).normalize(imagenet_stats)
+learn.data = data
+
+learn.freeze()
+learn.lr_find()
+learn.recorder.plot(return_fig=True).savefig("lrfind.jpg")
+lr = 1.5e-3
+learn.fit_one_cycle(5, slice(lr))
+dest = "Resnet152-128-stage-3"
+learn.save(dest)
+
+learn.unfreeze()
+learn.lr_find()
+learn.recorder.plot(return_fig=True).savefig("lrfind.jpg")
+learn.fit_one_cycle(5, slice(5e-5))
+dest = "Resnet152-128-stage-4"
+learn.save(dest)
+
+learn.lr_find()
+learn.recorder.plot(return_fig=True).savefig("lrfind.jpg")
+
+lr = 5e-5
+learn.fit_one_cycle(5, slice(lr))
+dest = "Resnet152-128-stage-5"
+learn.save(dest)
